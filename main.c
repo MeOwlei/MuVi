@@ -8,21 +8,17 @@
 #include <complex.h>
 #include <math.h>
 
-#include "plug.h"
+#include "muzk.h"
 
-plug_init_t plug_init = NULL;
+muzk_init_t muzk_init = NULL;
 
 #define ARRAY_LEN(xs) sizeof(xs)/sizeof(xs[0])
 #define N (1<<15)
 
-typedef struct{
-    float left;
-    float right;
-}Frame;
-
 float in[N];
 float in2[N];
 float complex out[N];
+float max_amp;
 
 size_t globe_frames_count = 0;
 
@@ -42,14 +38,17 @@ void fft(float in[], size_t stride, float complex out[], size_t n)
         out[k+ret]      = e - T;
     }
 }
-float max_amp;
 void callback(void *bufferData, unsigned int frames)
 {
-    if (frames > N) frames = N;
-    Frame *samplez = bufferData;
-    for (size_t i = 0; i < frames; i++) {
-        in[i] = samplez[i].left;
+    float (*samplez)[2] = bufferData;
+    for (size_t i = 0; i < frames; ++i) {
+        memmove(in,in+1,(N-1)*sizeof(in[0]));
+        in[N-1] = samplez[i][0];
     }
+}
+float amp(float complex z)
+{
+    return logf(z*conjf(z));
 }
 
 
@@ -79,9 +78,7 @@ int main(int argc, char **argv){
     InitAudioDevice();
     Music song = LoadMusicStream(file_path);
     PlayMusicStream(song);
-    SetExitKey(KEY_Q);
     SetMusicVolume(song, 0.5f);
-    float tt = GetMusicTimeLength(song);
     AttachAudioStreamProcessor(song.stream, callback);
 
     while (!WindowShouldClose()) {
@@ -106,6 +103,11 @@ int main(int argc, char **argv){
         BeginDrawing();
         ClearBackground(CLITERAL(Color){0x18,0x18,0x18,0xff});
 
+        float bar_width = (float)w/120; // Hard coded this because their are only ~120 (hearable)distinct notes 
+
+        float step = 1.06;              // or powf(2.0f, (float)1/12);
+        float base = 27.5;              // A0 (Music note)
+
         if (IsMusicStreamPlaying(song)){
             for (size_t i = 0; i <N; i++) {
                 float t = (float)i/N;
@@ -114,56 +116,31 @@ int main(int argc, char **argv){
             }
             fft(in2, 1, out, N);
         }
-        
-        float bar_width = (float)w/120; // Hard coded this because their are only ~120 (hearable)distinct notes 
-        float step = powf(2.0f, 1/12);
-        float *Amps = (float *)malloc(sizeof(float)*120);
-        float base = 27.5;//1.0f; 
-        Amps[0] = 0.0f;
-        max_amp = 0.0f;
-        for (size_t i = 1; i < 120; i++) { 
-            float srt;
-            float end;
-            if (i==0){
-                srt = Amps[i];
-                end = base;
-            }else{
-                srt= base;
-                end= (base*step);
+            max_amp = 0.0f;
+            for (size_t z = 0; z < N/2; ++z) {
+                float a = amp(out[z]);  
+                if (a > max_amp) max_amp = a;   
             }
-            float a = 0;
-            for (size_t z = base; z < N/2 && z < (size_t)end; z++) {
-                a+=cabsf(out[z]);  
+            for (size_t i = 0; i < 120; i++) { 
+                float srt;
+                float end;
+                if (i==0){
+                    srt = 1.0f;
+                    end = base;
+                }else{
+                    srt= base;
+                    end= (base*step);
+                }
+                float a = 0.0f;
+                for (size_t z = base; z < N/2 && z < (size_t)end; z++) {
+                    float b = amp(out[z]);  
+                    if (a < b) a = b;   
+                }
+                if (i!=0) base *=step;
+                float y = a/max_amp;
+                DrawRectangle(bar_width*i, h-h/2*y, bar_width, h/2*y, BLUE);
             }
-            a/= end - srt + 1; 
-            if (max_amp < a) max_amp = a;   
-            Amps[i] = a;
-            base *=step;
-        }
-
-        for (size_t i = 0; i < 120; i++) {
-            float y = Amps[i]/max_amp;
-            DrawRectangle(bar_width*i, h/2-h/2*y, bar_width, h/2*y, BLUE);
-        }
-
-        // int m = 0;
-        // for (float f = 20.0f; (size_t)f < N; f*=step) {
-        //     float fn = f*step;
-        //     float a = 0;
-        //     for (size_t q = (size_t)f; q < N && q < (size_t)fn; q++) {
-        //         a+=amp(out[(size_t)q]); 
-        //     }
-        //    a/=(size_t)fn -(size_t)f +1; 
-        //     float y = a/max_amp;
-        //     DrawRectangle(bar_width*m, h/2 - h/2*y, bar_width, h/2*y, BLUE);
-        //     m+=1;
-        // }
-
-        // for (size_t i = 0; i < 120; ++i) {
-        //     float y = cabsf(out[i])/max_amp;
-        //     DrawRectangle(bar_width*i, h/2 - h/2*y, bar_width, h/2*y, BLUE);
-        // }
-
+        // } 
         EndDrawing();
     }
     CloseWindow();
