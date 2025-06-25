@@ -2,7 +2,7 @@
 A Music Visualizer inspired by [Musializer](https://github.com/tsoding/musializer)
 
 > [!WARNING]
-> NOT Compeleted. Only works on Lixus
+> NOT Compeleted. Only works on Linux
 
 ## Quick Start
 
