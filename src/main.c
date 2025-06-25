@@ -8,14 +8,16 @@
 
 const char *lib_name = "libmuzk.so";
 void *libmuzk = NULL;
-muzk_init_t muzk_init = NULL;
-muzk_update_t muzk_update = NULL;
-Muzk muzk = {0};
 
-#define ARRAY_LEN(xs) sizeof(xs)/sizeof(xs[0])
-
-size_t globe_frames_count = 0;
-
+#ifdef HOTRELOAD
+#define X(name, ...) name##_t *name = NULL;
+LIST_OF_FUNC
+#undef X
+#else
+#define X(name, ...) name##_t name;
+LIST_OF_FUNC
+#undef X
+#endif
 
 char* shift_arg(int *argc, char ***argv)
 {
@@ -27,22 +29,22 @@ char* shift_arg(int *argc, char ***argv)
 }
 bool reload_lib()
 {
+#ifdef HOTRELOAD
     if (libmuzk != NULL) dlclose(libmuzk);
     libmuzk = dlopen(lib_name, RTLD_NOW);
     if (libmuzk == NULL){
         fprintf(stderr, "ERROR: %s", dlerror());
         return 1;
     }
-    muzk_init = dlsym(libmuzk, "muzk_init");
-    if (muzk_init == NULL){
-        fprintf(stderr, "ERROR: %s", dlerror());
-        return 1;
+
+#define X(name, ...) name = dlsym(libmuzk, #name);   \
+    if (name == NULL){                          \
+        fprintf(stderr, "ERROR: %s", dlerror());\
+        return 1;                               \
     }
-    muzk_update = dlsym(libmuzk, "muzk_update");
-    if (muzk_update == NULL){
-        fprintf(stderr, "ERROR: %s", dlerror());
-        return 1;
-    }
+LIST_OF_FUNC
+#undef X
+#endif
     return true;
 }
 
@@ -62,13 +64,15 @@ int main(int argc, char **argv){
     InitWindow(840, 630, "Music Visualizeir");
     SetTargetFPS(60);
     InitAudioDevice();
-    muzk_init(&muzk, file_path);
+    muzk_init(file_path);
 
     while (!WindowShouldClose()) {
         if (IsKeyPressed(KEY_R)) {
+            void *state = muzk_pre_reload();
             reload_lib();
+            muzk_post_reload(state);
         }
-        muzk_update(&muzk);
+        muzk_update();
     }
     CloseWindow();
 

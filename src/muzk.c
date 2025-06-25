@@ -1,4 +1,5 @@
 #include "muzk.h"
+#include <stdlib.h>
 #include <math.h>
 #include <complex.h>
 #include <raylib.h>
@@ -10,6 +11,13 @@ float in[N];
 float in2[N];
 float complex out[N];
 float max_amp;
+
+typedef struct{
+    Music song;
+    const char *label;
+}Muzk;
+
+Muzk *muzk = NULL;
 
 void fft(float in[], size_t stride, float complex out[], size_t n)
 {
@@ -42,15 +50,35 @@ float amp(float complex z)
     return logf(z*conjf(z));
 }
 
-void muzk_init(Muzk *muzk, const char *file_path)
+void muzk_init(const char *file_path)
 {
+    muzk = malloc(sizeof(Muzk));
+    if (file_path == NULL) {
+        muzk->label = "Drag&Drop Music Here";
+    }else{
+        muzk->label = "Now: "; 
+    }
     muzk->song = LoadMusicStream(file_path);
-    PlayMusicStream(muzk->song);
     SetMusicVolume(muzk->song, 0.5f);
+    PlayMusicStream(muzk->song);
     AttachAudioStreamProcessor(muzk->song.stream, callback);
 }
 
-void muzk_update(Muzk *muzk)
+Muzk* muzk_pre_reload()
+{
+    StopMusicStream(muzk->song);
+    DetachAudioStreamProcessor(muzk->song.stream, callback);
+    return muzk;
+}
+
+void muzk_post_reload(Muzk *state)
+{
+    muzk = state;
+    PlayMusicStream(muzk->song);
+    AttachAudioStreamProcessor(muzk->song.stream, callback);
+}
+
+void muzk_update()
 {
     UpdateMusicStream(muzk->song);
 
@@ -67,6 +95,18 @@ void muzk_update(Muzk *muzk)
         PlayMusicStream(muzk->song);
     }
 
+    if (IsFileDropped()) {
+        FilePathList filename = LoadDroppedFiles();
+        char* song_n = filename.paths[0];
+        DetachAudioStreamProcessor(muzk->song.stream, callback);
+        StopMusicStream(muzk->song);
+        UnloadMusicStream(muzk->song);
+        muzk->song = LoadMusicStream(song_n);
+        PlayMusicStream(muzk->song);
+        UnloadDroppedFiles(filename);
+        AttachAudioStreamProcessor(muzk->song.stream, callback);
+    }
+
     int h = GetRenderHeight();
     int w = GetRenderWidth();
 
@@ -78,43 +118,52 @@ void muzk_update(Muzk *muzk)
     float step = 1.06;              // or powf(2.0f, (float)1/12);
     float base = 27.5;              // A0 (1st Music note)
 
-    if (IsMusicStreamPlaying(muzk->song)){
-        for (size_t i = 0; i <N; i++) {
-            float t = (float)i/N;
-            float hann = 0.5 - 0.5*cosf(2*PI*t);
-            in2[i] = in[i]*hann;
-        }
-        fft(in2, 1, out, N);
-    }
-
-    max_amp = 0.0f;
-    for (size_t z = 0; z < N/2; ++z) {
-        float a = amp(out[z]);  
-        if (a > max_amp) max_amp = a;   
-    }
-
-    for (size_t i = 0; i < 120; i++) { 
-        float srt;
-        float end;
-        if (i==0){
-            srt = 1.0f;
-            end = base;
-        }else{
-            srt = base;
-            end = (base*step);
-        }
-        
-        float a = 0.0f;
-        for (size_t z = srt; z < N/2 && z < (size_t)end; z++) {
-            float b = amp(out[z]);  
-            if (a < b) a = b;   
+    if (IsMusicValid(muzk->song)){
+        if (IsMusicStreamPlaying(muzk->song)){
+            for (size_t i = 0; i <N; i++) {
+                float t = (float)i/N;
+                float hann = 0.5 - 0.5*cosf(2*PI*t);
+                in2[i] = in[i]*hann;
+            }
+            fft(in2, 1, out, N);
         }
 
-        if (i!=0) base *=step;
-        float y = a/max_amp;
-        DrawRectangle(bar_width*i, h-h/2*y, bar_width, h/2*y, BLUE);
+        max_amp = 0.0f;
+        for (size_t z = 0; z < N/2; ++z) {
+            float a = amp(out[z]);  
+            if (a > max_amp) max_amp = a;   
+        }
+
+        // Converts FFT output to logrithmic scale and renders bars
+        for (size_t i = 0; i < 120; i++) { 
+            float srt;
+            float end;
+            if (i==0){
+                srt = 1.0f;
+                end = base;
+            }else{
+                srt = base;
+                end = (base*step);
+            }
+
+            float a = 0.0f;
+            for (size_t z = srt; z < N/2 && z < (size_t)end; z++) {
+                float b = amp(out[z]);  
+                if (a < b) a = b;   
+            }
+
+            if (i!=0) base *=step;
+            float y = a/max_amp;
+            DrawRectangle(bar_width*i, h-h/2*y, bar_width, h/2*y, BLUE);
+        }
+    }else {
+        DrawText(muzk->label, 0, 0, 69, WHITE); 
     }
 
     EndDrawing();
 }
+
+
+
+
 

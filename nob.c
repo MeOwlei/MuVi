@@ -31,7 +31,8 @@ int main(int argc, char **argv){
     nob_cmd_append(&cmd, "clang");
     nob_cc_flags(&cmd);
 
-    nob_cc_output(&cmd, BUILD_FOLDER"main");
+    nob_cc_output(&cmd, BUILD_FOLDER"muvi");
+    nob_cmd_append(&cmd, SRC_FOLDER"muzk.c");    
     nob_cc_inputs(&cmd, SRC_FOLDER"main.c");
     nob_cmd_append(&cmd, "-lraylib");    
     nob_cmd_append(&cmd, "-lm");    

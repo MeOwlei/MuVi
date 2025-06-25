@@ -1,3 +1,5 @@
 music/
+build/
 *.mp3
 fft*
+nob.old
