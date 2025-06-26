@@ -1,3 +1,4 @@
+#include "muzk.h"
 #include <assert.h>
 #include <stdlib.h>
 #include <math.h>
@@ -5,9 +6,8 @@
 #include <raylib.h>
 #include <string.h>
 
-#include "muzk.h"
-
 #define N (1<<15)
+#define FONT_SIZE 69
 
 float in[N];
 float in2[N];
@@ -16,11 +16,12 @@ float max_amp;
 
 typedef struct{
     Music song;
+    Font font;
     const char *label;
-    Color lcoler;
     bool error;
 }Muzk;
 
+Color lcoler;
 Muzk *muzk = NULL;
 
 void fft(float in[], size_t stride, float complex out[], size_t n)
@@ -59,6 +60,12 @@ void muzk_init(void)
     muzk = malloc(sizeof(Muzk));
     assert(muzk != NULL);
     memset(muzk, 0, sizeof(*muzk));
+    muzk->font = LoadFontEx("./fonts/FiraCode-Meduim.ttf", FONT_SIZE, NULL, 0);
+    if (!IsFontValid(muzk->font)) {
+        UnloadFont(muzk->font);
+        muzk->font = GetFontDefault();
+        muzk->font.baseSize = 69;
+    }
 }
 
 Muzk* muzk_pre_reload(void)
@@ -170,16 +177,19 @@ void muzk_update(void)
             DrawRectangle(bar_width*i, h-h/2*y, bar_width, h/2*y, BLUE);
         }
     }else {
-        int height = 48;
         if (muzk->error) {
             muzk->label = "Could Not load File";
-            muzk->lcoler = RED;
+            lcoler = RED;
         }else {
-            muzk->label = "Drag&Drop Music Here";
-            muzk->lcoler = WHITE;
+            muzk->label = "Bug in build script";
+            lcoler = GREEN;
         }
-        int width = MeasureText(muzk->label, height);
-        DrawText(muzk->label, (w-width)/2, (h-height)/2, height, WHITE); 
+        Vector2 size = MeasureTextEx(muzk->font,muzk->label, muzk->font.baseSize, 0);
+        Vector2 pos = {
+            w/2-size.x/2,
+            h/2-size.y/2
+        };
+        DrawTextEx(muzk->font, muzk->label, pos, muzk->font.baseSize, 0, lcoler); 
     }
 
     EndDrawing();

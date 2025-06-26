@@ -1,27 +1,25 @@
 #include <assert.h>
+#include "muzk.h"
 #include <stdio.h>
 #include <raylib.h>
 #include <dlfcn.h>
 #include <string.h>
 
-#include "muzk.h"
 
 const char *lib_name = "libmuzk.so";
 void *libmuzk = NULL;
 
 #ifdef HOTRELOAD
 #define X(name, ...) name##_t *name = NULL;
-LIST_OF_FUNC
-#undef X
 #else
 #define X(name, ...) name##_t name;
+#endif
 LIST_OF_FUNC
 #undef X
-#endif
 
+#ifdef HOTRELOAD
 bool reload_lib()
 {
-#ifdef HOTRELOAD
     if (libmuzk != NULL) dlclose(libmuzk);
     libmuzk = dlopen(lib_name, RTLD_NOW);
     if (libmuzk == NULL){
@@ -36,11 +34,13 @@ bool reload_lib()
     }
 LIST_OF_FUNC
 #undef X
-#endif
     return true;
 }
+#else 
+#define reload_lib() true
+#endif
 
-int main(int argc, char **argv){
+int main(void){
 
     if (!reload_lib()) return 1;
 

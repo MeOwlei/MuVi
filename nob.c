@@ -32,7 +32,11 @@ int main(int argc, char **argv){
     nob_cc_flags(&cmd);
 
     nob_cc_output(&cmd, BUILD_FOLDER"muvi");
-    nob_cmd_append(&cmd, SRC_FOLDER"muzk.c");    
+#ifdef HOTRELOAD
+ nob_cmd_append(&cmd, "-DHOTRELOAD");    
+#else
+ nob_cmd_append(&cmd, SRC_FOLDER"muzk.c");    
+#endif
     nob_cc_inputs(&cmd, SRC_FOLDER"main.c");
     nob_cmd_append(&cmd, "-lraylib");    
     nob_cmd_append(&cmd, "-lm");    

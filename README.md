@@ -4,11 +4,15 @@ A Music Visualizer inspired by [Musializer](https://github.com/tsoding/musialize
 > [!WARNING]
 > NOT Compeleted. Only works on Linux
 
+## Dependency 
+
+- [Raylib](https://github.com/raysan5/raylib)
+
 ## Quick Start
 
 ```console
-$ ./nob
-$ ./build/muvi song.mp3(optional)
+$ cc -o build/muvi src/muzk.c src/main.c -lm -lraylib
+$ ./build/muvi 
 ```
 
 ## Hot Reloading
@@ -18,7 +22,7 @@ Keep the app running. Rebuild with `./nob`. Hot reload by focusing on the window
 ```console
 $ export HOTRELOAD=1
 $ export LD_LIBRARY_PATH="./build/:$LD_LIBRARY_PATH"
-$ ./nob
+$ cc -o build/muvi  src/main.c -lm -lraylib
 $ ./build/muvi
 ```
 
