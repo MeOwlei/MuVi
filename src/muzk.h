@@ -2,7 +2,7 @@
 #define MUZK_H_ 
 
 #define LIST_OF_FUNC    \
-    X(muzk_init, void, const char* file_path)      \
+    X(muzk_init, void, void)      \
     X(muzk_update, void, void)      \
     X(muzk_pre_reload, void*, void)  \
     X(muzk_post_reload, void, void*)

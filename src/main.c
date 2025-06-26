@@ -19,14 +19,6 @@ LIST_OF_FUNC
 #undef X
 #endif
 
-char* shift_arg(int *argc, char ***argv)
-{
-    assert(*argc > 0);
-    char *result = (**argv);
-    (*argv) +=1;
-    (*argc) -=1;
-    return result;
-}
 bool reload_lib()
 {
 #ifdef HOTRELOAD
@@ -50,21 +42,12 @@ LIST_OF_FUNC
 
 int main(int argc, char **argv){
 
-    const char *program = shift_arg(&argc, &argv);
-
-    if (argc == 0) {
-        fprintf(stderr, "USSAGE: %s <input>\n", program);
-        fprintf(stderr, "ERROR: no input file provided.\n");
-        return 1;
-    }
     if (!reload_lib()) return 1;
-
-    const char *file_path = shift_arg(&argc, &argv);
 
     InitWindow(840, 630, "Music Visualizeir");
     SetTargetFPS(60);
     InitAudioDevice();
-    muzk_init(file_path);
+    muzk_init();
 
     while (!WindowShouldClose()) {
         if (IsKeyPressed(KEY_R)) {

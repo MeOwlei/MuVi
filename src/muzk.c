@@ -1,9 +1,11 @@
-#include "muzk.h"
+#include <assert.h>
 #include <stdlib.h>
 #include <math.h>
 #include <complex.h>
 #include <raylib.h>
 #include <string.h>
+
+#include "muzk.h"
 
 #define N (1<<15)
 
@@ -15,6 +17,8 @@ float max_amp;
 typedef struct{
     Music song;
     const char *label;
+    Color lcoler;
+    bool error;
 }Muzk;
 
 Muzk *muzk = NULL;
@@ -50,61 +54,69 @@ float amp(float complex z)
     return logf(z*conjf(z));
 }
 
-void muzk_init(const char *file_path)
+void muzk_init(void)
 {
     muzk = malloc(sizeof(Muzk));
-    if (file_path == NULL) {
-        muzk->label = "Drag&Drop Music Here";
-    }else{
-        muzk->label = "Now: "; 
-    }
-    muzk->song = LoadMusicStream(file_path);
-    SetMusicVolume(muzk->song, 0.5f);
-    PlayMusicStream(muzk->song);
-    AttachAudioStreamProcessor(muzk->song.stream, callback);
+    assert(muzk != NULL);
+    memset(muzk, 0, sizeof(*muzk));
 }
 
-Muzk* muzk_pre_reload()
+Muzk* muzk_pre_reload(void)
 {
-    StopMusicStream(muzk->song);
-    DetachAudioStreamProcessor(muzk->song.stream, callback);
+    if (IsMusicValid(muzk->song)) {
+        DetachAudioStreamProcessor(muzk->song.stream, callback);
+    }
     return muzk;
 }
 
 void muzk_post_reload(Muzk *state)
 {
     muzk = state;
-    PlayMusicStream(muzk->song);
-    AttachAudioStreamProcessor(muzk->song.stream, callback);
+    if (IsMusicValid(muzk->song)) {
+        AttachAudioStreamProcessor(muzk->song.stream, callback);
+    }   
 }
 
-void muzk_update()
+void muzk_update(void)
 {
-    UpdateMusicStream(muzk->song);
+    if (IsMusicValid(muzk->song)) {
+        UpdateMusicStream(muzk->song);
+    }
 
     if (IsKeyPressed(KEY_SPACE)){
-        if (IsMusicStreamPlaying(muzk->song)){
-            PauseMusicStream(muzk->song);
-        }else {
-            PlayMusicStream(muzk->song);
+        if (IsMusicValid(muzk->song)) {
+            if (IsMusicStreamPlaying(muzk->song)){
+                PauseMusicStream(muzk->song);
+            }else {
+                PlayMusicStream(muzk->song);
+            }
         }
     }
     
     if (IsKeyPressed(KEY_Q)){
-        StopMusicStream(muzk->song);
-        PlayMusicStream(muzk->song);
+        if (IsMusicValid(muzk->song)) {
+            StopMusicStream(muzk->song);
+            PlayMusicStream(muzk->song);
+        }
     }
 
     if (IsFileDropped()) {
         FilePathList filename = LoadDroppedFiles();
         char* song_n = filename.paths[0];
-        DetachAudioStreamProcessor(muzk->song.stream, callback);
-        StopMusicStream(muzk->song);
-        UnloadMusicStream(muzk->song);
+        if (IsMusicValid(muzk->song)) {
+            DetachAudioStreamProcessor(muzk->song.stream, callback);
+            StopMusicStream(muzk->song);
+            UnloadMusicStream(muzk->song);
+        }
         muzk->song = LoadMusicStream(song_n);
-        PlayMusicStream(muzk->song);
+        if (IsMusicValid(muzk->song)) {
+            PlayMusicStream(muzk->song);
+            AttachAudioStreamProcessor(muzk->song.stream, callback);
+        } else {
+            muzk->error = true;
+            UnloadMusicStream(muzk->song);
+        }
         UnloadDroppedFiles(filename);
-        AttachAudioStreamProcessor(muzk->song.stream, callback);
     }
 
     int h = GetRenderHeight();
@@ -119,9 +131,10 @@ void muzk_update()
     float base = 27.5;              // A0 (1st Music note)
 
     if (IsMusicValid(muzk->song)){
+        muzk->error = false;
         if (IsMusicStreamPlaying(muzk->song)){
             for (size_t i = 0; i <N; i++) {
-                float t = (float)i/N;
+                float t = (float)i/(N-1);
                 float hann = 0.5 - 0.5*cosf(2*PI*t);
                 in2[i] = in[i]*hann;
             }
@@ -140,10 +153,10 @@ void muzk_update()
             float end;
             if (i==0){
                 srt = 1.0f;
-                end = base;
+                end = floorf(base);
             }else{
                 srt = base;
-                end = (base*step);
+                end = floorf(base*step);
             }
 
             float a = 0.0f;
@@ -157,7 +170,16 @@ void muzk_update()
             DrawRectangle(bar_width*i, h-h/2*y, bar_width, h/2*y, BLUE);
         }
     }else {
-        DrawText(muzk->label, 0, 0, 69, WHITE); 
+        int height = 48;
+        if (muzk->error) {
+            muzk->label = "Could Not load File";
+            muzk->lcoler = RED;
+        }else {
+            muzk->label = "Drag&Drop Music Here";
+            muzk->lcoler = WHITE;
+        }
+        int width = MeasureText(muzk->label, height);
+        DrawText(muzk->label, (w-width)/2, (h-height)/2, height, WHITE); 
     }
 
     EndDrawing();
