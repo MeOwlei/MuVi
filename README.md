@@ -11,18 +11,7 @@ A Music Visualizer inspired by [Musializer](https://github.com/tsoding/musialize
 ## Quick Start
 
 ```console
-$ cc -o build/muvi src/muzk.c src/main.c -lm -lraylib
+$ ./nob
 $ ./build/muvi 
-```
-
-## Hot Reloading
-
-Keep the app running. Rebuild with `./nob`. Hot reload by focusing on the window of the app and pressing <kbd>r</kbd>.
-
-```console
-$ export HOTRELOAD=1
-$ export LD_LIBRARY_PATH="./build/:$LD_LIBRARY_PATH"
-$ cc -o build/muvi  src/main.c -lm -lraylib
-$ ./build/muvi
 ```
 

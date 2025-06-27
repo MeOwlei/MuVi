@@ -60,7 +60,7 @@ void muzk_init(void)
     muzk = malloc(sizeof(Muzk));
     assert(muzk != NULL);
     memset(muzk, 0, sizeof(*muzk));
-    muzk->font = LoadFontEx("./fonts/FiraCode-Meduim.ttf", FONT_SIZE, NULL, 0);
+    muzk->font = LoadFontEx("./fonts/OpenDyslexicNerdFont-Regular.otf", FONT_SIZE, NULL, 0);
     if (!IsFontValid(muzk->font)) {
         UnloadFont(muzk->font);
         muzk->font = GetFontDefault();
@@ -181,8 +181,8 @@ void muzk_update(void)
             muzk->label = "Could Not load File";
             lcoler = RED;
         }else {
-            muzk->label = "Bug in build script";
-            lcoler = GREEN;
+            muzk->label = "Drag&Drop Music Here";
+            lcoler = WHITE;
         }
         Vector2 size = MeasureTextEx(muzk->font,muzk->label, muzk->font.baseSize, 0);
         Vector2 pos = {
