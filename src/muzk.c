@@ -60,7 +60,7 @@ void muzk_init(void)
     muzk = malloc(sizeof(Muzk));
     assert(muzk != NULL);
     memset(muzk, 0, sizeof(*muzk));
-    muzk->font = LoadFontEx("./fonts/OpenDyslexicNerdFont-Regular.otf", FONT_SIZE, NULL, 0);
+    muzk->font = LoadFontEx("./fonts/OpenDyslexic/OpenDyslexicNerdFont-Regular.otf", FONT_SIZE, NULL, 0);
     if (!IsFontValid(muzk->font)) {
         UnloadFont(muzk->font);
         muzk->font = GetFontDefault();
@@ -128,6 +128,7 @@ void muzk_update(void)
 
     int h = GetRenderHeight();
     int w = GetRenderWidth();
+    float tt = GetMusicTimeLength(muzk->song);
 
     BeginDrawing();
     ClearBackground(CLITERAL(Color){0x18,0x18,0x18,0xff});
@@ -174,7 +175,9 @@ void muzk_update(void)
 
             if (i!=0) base *=step;
             float y = a/max_amp;
+            float progress = GetMusicTimePlayed(muzk->song)/tt;
             DrawRectangle(bar_width*i, h-h/2*y, bar_width, h/2*y, BLUE);
+            DrawRectangle(0, 0, w*progress, 10, CLITERAL(Color){0x22,0x07,0x92,0xFF});
         }
     }else {
         if (muzk->error) {
