@@ -1,5 +1,6 @@
 #include "muzk.h"
 #include <assert.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
 #include <complex.h>
@@ -12,6 +13,8 @@
 float in[N];
 float in2[N];
 float complex out[N];
+float out_log[120];
+float out_smooth[120];
 float max_amp;
 
 typedef struct{
@@ -23,6 +26,7 @@ typedef struct{
 
 Color lcoler;
 Muzk *muzk = NULL;
+
 
 void fft(float in[], size_t stride, float complex out[], size_t n)
 {
@@ -60,6 +64,7 @@ void muzk_init(void)
     muzk = malloc(sizeof(Muzk));
     assert(muzk != NULL);
     memset(muzk, 0, sizeof(*muzk));
+    muzk->error = false;
     muzk->font = LoadFontEx("./fonts/OpenDyslexic/OpenDyslexicNerdFont-Regular.otf", FONT_SIZE, NULL, 0);
     if (!IsFontValid(muzk->font)) {
         UnloadFont(muzk->font);
@@ -128,6 +133,7 @@ void muzk_update(void)
 
     int h = GetRenderHeight();
     int w = GetRenderWidth();
+    float dt = GetFrameTime();
     float tt = GetMusicTimeLength(muzk->song);
 
     BeginDrawing();
@@ -154,6 +160,7 @@ void muzk_update(void)
             float a = amp(out[z]);  
             if (a > max_amp) max_amp = a;   
         }
+        // printf("&.2f\n",out_smooth[0]);
 
         // Converts FFT output to logrithmic scale and renders bars
         for (size_t i = 0; i < 120; i++) { 
@@ -161,10 +168,10 @@ void muzk_update(void)
             float end;
             if (i==0){
                 srt = 1.0f;
-                end = floorf(base);
+                end = base;
             }else{
                 srt = base;
-                end = floorf(base*step);
+                end = base*step;
             }
 
             float a = 0.0f;
@@ -172,11 +179,16 @@ void muzk_update(void)
                 float b = amp(out[z]);  
                 if (a < b) a = b;   
             }
-
-            if (i!=0) base *=step;
-            float y = a/max_amp;
-            float progress = GetMusicTimePlayed(muzk->song)/tt;
+            base = end;
+            out_log[i] = a/max_amp;
+        }
+        for (size_t i = 0; i < 120; i++) { 
+            out_smooth[i] += (out_log[i] - out_smooth[i])*dt;
+            float y = out_log[i];
             DrawRectangle(bar_width*i, h-h/2*y, bar_width, h/2*y, BLUE);
+            // DrawRectangle(bar_width*i, h-h/2*out_smooth[i], bar_width, h/2*out_smooth[i], BLUE);
+
+            float progress = GetMusicTimePlayed(muzk->song)/tt;
             DrawRectangle(0, 0, w*progress, 10, CLITERAL(Color){0x22,0x07,0x92,0xFF});
         }
     }else {

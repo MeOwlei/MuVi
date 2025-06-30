@@ -1,10 +1,11 @@
 #include <assert.h>
-#include "muzk.h"
 #include <stdio.h>
 #include <raylib.h>
 #include <dlfcn.h>
 #include <string.h>
+#include "muzk.h"
 
+// #define HOTRELOAD
 
 const char *lib_name = "libmuzk.so";
 void *libmuzk = NULL;
@@ -42,12 +43,15 @@ LIST_OF_FUNC
 
 int main(void){
 
+    printf("Where is it??");
     if (!reload_lib()) return 1;
 
     InitWindow(840, 630, "Music Visualizeir");
     SetTargetFPS(60);
     InitAudioDevice();
+    printf("Its NOT Okay");
     muzk_init();
+    printf("Its Okay");
 
     while (!WindowShouldClose()) {
         if (IsKeyPressed(KEY_R)) {
