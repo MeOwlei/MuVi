@@ -1,5 +1,6 @@
 #include "muzk.h"
 #include <assert.h>
+#include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
@@ -13,7 +14,7 @@
 float in[N];
 float in2[N];
 float complex out[N];
-float out_log[120];
+// float out_log[120];
 float out_smooth[120];
 float max_amp;
 
@@ -160,7 +161,8 @@ void muzk_update(void)
             float a = amp(out[z]);  
             if (a > max_amp) max_amp = a;   
         }
-        // printf("&.2f\n",out_smooth[0]);
+
+        float smoothness = 9;
 
         // Converts FFT output to logrithmic scale and renders bars
         for (size_t i = 0; i < 120; i++) { 
@@ -180,13 +182,16 @@ void muzk_update(void)
                 if (a < b) a = b;   
             }
             base = end;
-            out_log[i] = a/max_amp;
-        }
-        for (size_t i = 0; i < 120; i++) { 
-            out_smooth[i] += (out_log[i] - out_smooth[i])*dt;
-            float y = out_log[i];
+
+            a/=max_amp;
+            // out_log[i] = a/max_amp;
+
+                    // IDK why it was nan after setting every [i] = 0.0f
+            if (isnan(out_smooth[i])) out_smooth[i] = 0.0f; // safeguard aganist NAN
+            
+            out_smooth[i] += (a/* out_log[i] */ - out_smooth[i])*dt*smoothness;
+            float y = out_smooth[i];
             DrawRectangle(bar_width*i, h-h/2*y, bar_width, h/2*y, BLUE);
-            // DrawRectangle(bar_width*i, h-h/2*out_smooth[i], bar_width, h/2*out_smooth[i], BLUE);
 
             float progress = GetMusicTimePlayed(muzk->song)/tt;
             DrawRectangle(0, 0, w*progress, 10, CLITERAL(Color){0x22,0x07,0x92,0xFF});

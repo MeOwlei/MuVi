@@ -25,13 +25,13 @@ bool reload_lib()
     libmuzk = dlopen(lib_name, RTLD_NOW);
     if (libmuzk == NULL){
         fprintf(stderr, "ERROR: %s", dlerror());
-        return 1;
+        return false;
     }
 
 #define X(name, ...) name = dlsym(libmuzk, #name);   \
     if (name == NULL){                          \
         fprintf(stderr, "ERROR: %s", dlerror());\
-        return 1;                               \
+        return false;                               \
     }
 LIST_OF_FUNC
 #undef X
