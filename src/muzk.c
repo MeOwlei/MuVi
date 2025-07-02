@@ -10,12 +10,12 @@
 
 #define N (1<<15)
 #define FONT_SIZE 69
+#define M 120
 
 float in[N];
 float in2[N];
 float complex out[N];
-// float out_log[120];
-float out_smooth[120];
+float out_smooth[M];
 float max_amp;
 
 typedef struct{
@@ -140,7 +140,7 @@ void muzk_update(void)
     BeginDrawing();
     ClearBackground(CLITERAL(Color){0x18,0x18,0x18,0xff});
 
-    float bar_width = (float)w/120; // Hard coded this because their are only ~120 (hearable)distinct notes 
+    float bar_width = (float)w/M; // Hard coded this because their are only ~M (hearable)distinct notes 
 
     float step = 1.06;              // or powf(2.0f, (float)1/12);
     float base = 27.5;              // A0 (1st Music note)
@@ -154,48 +154,73 @@ void muzk_update(void)
                 in2[i] = in[i]*hann;
             }
             fft(in2, 1, out, N);
-        }
 
-        max_amp = 0.0f;
-        for (size_t z = 0; z < N/2; ++z) {
-            float a = amp(out[z]);  
-            if (a > max_amp) max_amp = a;   
-        }
-
-        float smoothness = 9;
-
-        // Converts FFT output to logrithmic scale and renders bars
-        for (size_t i = 0; i < 120; i++) { 
-            float srt;
-            float end;
-            if (i==0){
-                srt = 1.0f;
-                end = base;
-            }else{
-                srt = base;
-                end = base*step;
+            max_amp = 0.0f;
+            for (size_t z = 0; z < N/2; ++z) {
+                float a = amp(out[z]);  
+                if (a > max_amp) max_amp = a;   
             }
 
-            float a = 0.0f;
-            for (size_t z = srt; z < N/2 && z < (size_t)end; z++) {
-                float b = amp(out[z]);  
-                if (a < b) a = b;   
+            float smoothness = 10;
+
+            // Converts FFT output to logrithmic scale and renders bars
+            for (size_t i = 0; i < M; i++) { 
+                float srt;
+                float end;
+                if (i==0){
+                    srt = 1.0f;
+                    end = base;
+                }else{
+                    srt = base;
+                    end = base*step;
+                }
+
+                float a = 0.0f;
+                for (size_t z = srt; z < N/2 && z < (size_t)end; z++) {
+                    float b = amp(out[z]);  
+                    if (a < b) a = b;   
+                }
+                base = end;
+
+                a/=max_amp;
+
+                // IDK why it was nan after setting every [i] = 0.0f
+                if (isnan(out_smooth[i])) out_smooth[i] = 0.0f; // safeguard aganist NAN
+
+                out_smooth[i] += (a/* out_log[i] */ - out_smooth[i])*dt*smoothness;
+                float y = out_smooth[i];
+                float hue = (float)360*i/M;
+                float sat = 0.7f;
+                float val = 1.0f;
+                Color c = ColorFromHSV( hue, sat, val);
+                Vector2 center = {
+                    bar_width*i + bar_width/2,
+                    h - h*2/3*y 
+                };
+                Vector2 endpnt = {
+                    bar_width*i + bar_width/2,
+                    h 
+                };
+                float radius = bar_width*sqrtf(y); 
+                float thick = bar_width*sqrtf(y)/2; 
+                DrawCircleV(center, radius, c);
+                DrawLineEx(center, endpnt, thick, c);
+                // DrawRectangle(bar_width*i, h-h*2/3*y, ceilf(bar_width), h*2/3*y, c);
+
             }
-            base = end;
-
-            a/=max_amp;
-            // out_log[i] = a/max_amp;
-
-                    // IDK why it was nan after setting every [i] = 0.0f
-            if (isnan(out_smooth[i])) out_smooth[i] = 0.0f; // safeguard aganist NAN
-            
-            out_smooth[i] += (a/* out_log[i] */ - out_smooth[i])*dt*smoothness;
-            float y = out_smooth[i];
-            DrawRectangle(bar_width*i, h-h/2*y, bar_width, h/2*y, BLUE);
-
-            float progress = GetMusicTimePlayed(muzk->song)/tt;
-            DrawRectangle(0, 0, w*progress, 10, CLITERAL(Color){0x22,0x07,0x92,0xFF});
+        }else {
+            muzk->label = "Music is Paused";
+            lcoler = CLITERAL(Color){0x4E,0xCE,0xEA,0xFF};
+            Vector2 size = MeasureTextEx(muzk->font,muzk->label, muzk->font.baseSize, 0);
+            Vector2 pos = {
+                w/2-size.x/2,
+                h/2-size.y/2
+            };
+            DrawTextEx(muzk->font, muzk->label, pos, muzk->font.baseSize, 0, lcoler); 
+        
         }
+        float progress = GetMusicTimePlayed(muzk->song)/tt;
+        DrawRectangle(0, 0, w*progress, 10, CLITERAL(Color){0x22,0x07,0x92,0xFF});
     }else {
         if (muzk->error) {
             muzk->label = "Could Not load File";
