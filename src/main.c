@@ -45,6 +45,7 @@ int main(void){
 
     if (!reload_lib()) return 1;
 
+    SetConfigFlags(FLAG_WINDOW_RESIZABLE | FLAG_MSAA_4X_HINT);
     InitWindow(840, 630, "Music Visualizeir");
     SetTargetFPS(60);
     InitAudioDevice();

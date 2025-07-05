@@ -6,6 +6,7 @@
 #include <math.h>
 #include <complex.h>
 #include <raylib.h>
+#include <rlgl.h>
 #include <string.h>
 
 #define N (1<<15)
@@ -16,6 +17,7 @@ float in[N];
 float in2[N];
 float complex out[N];
 float out_smooth[M];
+float out_smear[M];
 float max_amp;
 
 typedef struct{
@@ -23,6 +25,8 @@ typedef struct{
     Font font;
     const char *label;
     bool error;
+    Shader head;
+    Shader tail;
 }Muzk;
 
 Color lcoler;
@@ -72,6 +76,8 @@ void muzk_init(void)
         muzk->font = GetFontDefault();
         muzk->font.baseSize = 69;
     }
+    muzk->head = LoadShader(NULL, "./shaders/head.fs");
+    muzk->tail = LoadShader(NULL, "./shaders/tail.fs");
 }
 
 Muzk* muzk_pre_reload(void)
@@ -88,6 +94,10 @@ void muzk_post_reload(Muzk *state)
     if (IsMusicValid(muzk->song)) {
         AttachAudioStreamProcessor(muzk->song.stream, callback);
     }   
+    UnloadShader(muzk->head);
+    muzk->head = LoadShader(NULL, "./shaders/head.fs");
+    UnloadShader(muzk->tail);
+    muzk->tail = LoadShader(NULL, "./shaders/tail.fs");
 }
 
 void muzk_update(void)
@@ -160,9 +170,13 @@ void muzk_update(void)
                 float a = amp(out[z]);  
                 if (a > max_amp) max_amp = a;   
             }
+        }
 
-            float smoothness = 10;
+            float smoothness = 7;
+            float smearness = 5;
 
+            float sat = 0.7f;
+            float val = 1.0f;
             // Converts FFT output to logrithmic scale and renders bars
             for (size_t i = 0; i < M; i++) { 
                 float srt;
@@ -181,19 +195,18 @@ void muzk_update(void)
                     if (a < b) a = b;   
                 }
                 base = end;
-
                 a/=max_amp;
 
                 // IDK why it was nan after setting every [i] = 0.0f
                 if (isnan(out_smooth[i])) out_smooth[i] = 0.0f; // safeguard aganist NAN
+                out_smooth[i] += (a - out_smooth[i])*dt*smoothness;
+                if (isnan(out_smear[i])) out_smear[i] = 0.0f; // safeguard aganist NAN
+                out_smear[i] += (out_smooth[i] - out_smear[i])*dt*smearness;
 
-                out_smooth[i] += (a/* out_log[i] */ - out_smooth[i])*dt*smoothness;
                 float y = out_smooth[i];
                 float hue = (float)360*i/M;
-                float sat = 0.7f;
-                float val = 1.0f;
                 Color c = ColorFromHSV( hue, sat, val);
-                Vector2 center = {
+                Vector2 srtpnt = {
                     bar_width*i + bar_width/2,
                     h - h*2/3*y 
                 };
@@ -201,24 +214,59 @@ void muzk_update(void)
                     bar_width*i + bar_width/2,
                     h 
                 };
-                float radius = bar_width*sqrtf(y); 
                 float thick = bar_width*sqrtf(y)/2; 
-                DrawCircleV(center, radius, c);
-                DrawLineEx(center, endpnt, thick, c);
-                // DrawRectangle(bar_width*i, h-h*2/3*y, ceilf(bar_width), h*2/3*y, c);
-
+                DrawLineEx(srtpnt, endpnt, thick, c);
             }
-        }else {
-            muzk->label = "Music is Paused";
-            lcoler = CLITERAL(Color){0x4E,0xCE,0xEA,0xFF};
-            Vector2 size = MeasureTextEx(muzk->font,muzk->label, muzk->font.baseSize, 0);
-            Vector2 pos = {
-                w/2-size.x/2,
-                h/2-size.y/2
-            };
-            DrawTextEx(muzk->font, muzk->label, pos, muzk->font.baseSize, 0, lcoler); 
-        
-        }
+
+            Texture2D texture = { rlGetTextureIdDefault(), 1,1,1, PIXELFORMAT_UNCOMPRESSED_R8G8B8A8};
+            // Rendering Head
+            BeginShaderMode(muzk->head);
+            for (size_t i = 0; i < M; i++) {
+                float hue = (float)360*i/M;
+                float y = out_smooth[i];
+                Color c = ColorFromHSV( hue, sat, val);
+                Vector2 center = {
+                    bar_width*i + bar_width/2,
+                    h - h*2/3*y
+                };
+                float radius = 6*bar_width*sqrtf(y); 
+                Vector2 position = {
+                    .x = center.x - radius,
+                    .y = center.y - radius,
+                };
+                DrawTextureEx( texture, position, 0, 2*radius, c);
+            }
+            EndShaderMode();
+
+            // Rendering Tail
+            BeginShaderMode(muzk->tail);
+            for (size_t i = 0; i < M; i++) {
+                float srt = out_smear[i];
+                float end = out_smooth[i];
+                float hue = (float)360*i/M;
+                Color c = ColorFromHSV( hue, sat, val);
+                float height = h*2/3;
+                float x = bar_width*(i + 0.5);
+                float radius = 3*bar_width*sqrtf(srt); 
+                Rectangle rec2;
+                Vector2 pos ={.x=0,.y=0};
+                Rectangle rec = {
+                    .x = x - radius/2,
+                    .y = 0,
+                    .width = radius,
+                    .height = height*(end-srt),
+                };
+                if (srt >= end){
+                    rec.y = h - height*srt;
+                    rec2 = (Rectangle){0,0,1,0.5};
+                } else {
+                    rec.y = h- height*end;
+                    rec2 = (Rectangle){0,0.5,1,0.5};
+                }
+                DrawTexturePro(texture, rec2, rec, pos, 0, c);
+            }
+            EndShaderMode();
+
         float progress = GetMusicTimePlayed(muzk->song)/tt;
         DrawRectangle(0, 0, w*progress, 10, CLITERAL(Color){0x22,0x07,0x92,0xFF});
     }else {
