@@ -9,30 +9,30 @@
 #include <rlgl.h>
 #include <string.h>
 
-#define N (1<<15)
-#define FONT_SIZE 69
-#define M 120
+#define N (1<<15)   // no of frequencies for fft to calculate
+#define M 120       // only ~ 120 distinct Musical note we can hear
 
-float in[N];
-float in2[N];
-float complex out[N];
-float out_smooth[M];
-float out_smear[M];
+#define FONT_SIZE 69
+
+float in[N];  // raw samples
+float in2[N]; // procced samples keeps phantom/ghost frequencies away
+float complex out[N]; // raw fft result 
+float out_smooth[M];  // smoothen fft result as raw makes animation jittery
+float out_smear[M];   // more smoothen for trails 
+
 float max_amp;
 
 typedef struct{
     Music song;
     Font font;
-    const char *label;
     bool error;
     Shader head;
     Shader tail;
 }Muzk;
 
-Color lcoler;
 Muzk *muzk = NULL;
 
-
+// ref & ported from: https://rosettacode.org/wiki/Fast_Fourier_transform#Python 
 void fft(float in[], size_t stride, float complex out[], size_t n)
 {
     if (n==1){
@@ -71,7 +71,7 @@ void muzk_init(void)
     memset(muzk, 0, sizeof(*muzk));
     muzk->error = false;
     muzk->font = LoadFontEx("./fonts/OpenDyslexic/OpenDyslexicNerdFont-Regular.otf", FONT_SIZE, NULL, 0);
-    if (!IsFontValid(muzk->font)) {
+    if (!IsFontValid(muzk->font)) { // getting default font in case fail to load indented font
         UnloadFont(muzk->font);
         muzk->font = GetFontDefault();
         muzk->font.baseSize = 69;
@@ -102,31 +102,10 @@ void muzk_post_reload(Muzk *state)
 
 void muzk_update(void)
 {
-    if (IsMusicValid(muzk->song)) {
-        UpdateMusicStream(muzk->song);
-    }
-
-    if (IsKeyPressed(KEY_SPACE)){
-        if (IsMusicValid(muzk->song)) {
-            if (IsMusicStreamPlaying(muzk->song)){
-                PauseMusicStream(muzk->song);
-            }else {
-                PlayMusicStream(muzk->song);
-            }
-        }
-    }
-    
-    if (IsKeyPressed(KEY_Q)){
-        if (IsMusicValid(muzk->song)) {
-            StopMusicStream(muzk->song);
-            PlayMusicStream(muzk->song);
-        }
-    }
-
     if (IsFileDropped()) {
         FilePathList filename = LoadDroppedFiles();
         char* song_n = filename.paths[0];
-        if (IsMusicValid(muzk->song)) {
+        if (IsMusicValid(muzk->song)) { 
             DetachAudioStreamProcessor(muzk->song.stream, callback);
             StopMusicStream(muzk->song);
             UnloadMusicStream(muzk->song);
@@ -144,18 +123,37 @@ void muzk_update(void)
 
     int h = GetRenderHeight();
     int w = GetRenderWidth();
-    float dt = GetFrameTime();
+    float dt = GetFrameTime(); // delta time for smoother bar movements 
+
     float tt = GetMusicTimeLength(muzk->song);
+
+    float bar_width = (float)w/M;   // Hard coded this because their are only ~M (hearable)distinct notes 
 
     BeginDrawing();
     ClearBackground(CLITERAL(Color){0x18,0x18,0x18,0xff});
 
-    float bar_width = (float)w/M; // Hard coded this because their are only ~M (hearable)distinct notes 
-
-    float step = 1.06;              // or powf(2.0f, (float)1/12);
-    float base = 27.5;              // A0 (1st Music note)
+    float step = 1.06;  // or powf(2.0f, (float)1/12);
+    float base = 27.5;  // A0 (1st Music note)
 
     if (IsMusicValid(muzk->song)){
+        UpdateMusicStream(muzk->song);
+
+        if (IsKeyPressed(KEY_SPACE)){
+            if (IsMusicValid(muzk->song)) {
+                if (IsMusicStreamPlaying(muzk->song)){
+                    PauseMusicStream(muzk->song);
+                }else {
+                    PlayMusicStream(muzk->song);
+                }
+            }
+        }
+
+        if (IsKeyPressed(KEY_Q)){
+            if (IsMusicValid(muzk->song)) {
+                StopMusicStream(muzk->song);
+                PlayMusicStream(muzk->song);
+            }
+        }
         muzk->error = false;
         if (IsMusicStreamPlaying(muzk->song)){
             for (size_t i = 0; i <N; i++) {
@@ -172,117 +170,123 @@ void muzk_update(void)
             }
         }
 
-            float smoothness = 7;
-            float smearness = 5;
+        float smoothness = 7; // controls velocity of bars
+        float smearness = 5;  // controls velocity for smear frames
 
-            float sat = 0.7f;
-            float val = 1.0f;
-            // Converts FFT output to logrithmic scale and renders bars
-            for (size_t i = 0; i < M; i++) { 
-                float srt;
-                float end;
-                if (i==0){
-                    srt = 1.0f;
-                    end = base;
-                }else{
-                    srt = base;
-                    end = base*step;
-                }
+        float sat = 0.7f;   // color saturation in HSV [0..1]
+        float val = 1.0f;   // color value in HSV [0..1]
 
-                float a = 0.0f;
-                for (size_t z = srt; z < N/2 && z < (size_t)end; z++) {
-                    float b = amp(out[z]);  
-                    if (a < b) a = b;   
-                }
-                base = end;
-                a/=max_amp;
-
-                // IDK why it was nan after setting every [i] = 0.0f
-                if (isnan(out_smooth[i])) out_smooth[i] = 0.0f; // safeguard aganist NAN
-                out_smooth[i] += (a - out_smooth[i])*dt*smoothness;
-                if (isnan(out_smear[i])) out_smear[i] = 0.0f; // safeguard aganist NAN
-                out_smear[i] += (out_smooth[i] - out_smear[i])*dt*smearness;
-
-                float y = out_smooth[i];
-                float hue = (float)360*i/M;
-                Color c = ColorFromHSV( hue, sat, val);
-                Vector2 srtpnt = {
-                    bar_width*i + bar_width/2,
-                    h - h*2/3*y 
-                };
-                Vector2 endpnt = {
-                    bar_width*i + bar_width/2,
-                    h 
-                };
-                float thick = bar_width*sqrtf(y)/2; 
-                DrawLineEx(srtpnt, endpnt, thick, c);
+// Converts FFT output to logrithmic scale and calculates this out_smooth and out_smear
+        for (size_t i = 0; i < M; i++) { 
+            float srt;
+            float end;
+            if (i==0){
+                srt = 1.0f;
+                end = base;
+            }else{
+                srt = base;
+                end = base*step;
             }
 
-            Texture2D texture = { rlGetTextureIdDefault(), 1,1,1, PIXELFORMAT_UNCOMPRESSED_R8G8B8A8};
-            // Rendering Head
-            BeginShaderMode(muzk->head);
-            for (size_t i = 0; i < M; i++) {
-                float hue = (float)360*i/M;
-                float y = out_smooth[i];
-                Color c = ColorFromHSV( hue, sat, val);
-                Vector2 center = {
-                    bar_width*i + bar_width/2,
-                    h - h*2/3*y
-                };
-                float radius = 6*bar_width*sqrtf(y); 
-                Vector2 position = {
-                    .x = center.x - radius,
-                    .y = center.y - radius,
-                };
-                DrawTextureEx( texture, position, 0, 2*radius, c);
+            float a = 0.0f;
+            for (size_t z = srt; z < N/2 && z < (size_t)end; z++) {
+                float b = amp(out[z]);  
+                if (a < b) a = b;   
             }
-            EndShaderMode();
+            base = end;
+            a/=max_amp;
 
-            // Rendering Tail
-            BeginShaderMode(muzk->tail);
-            for (size_t i = 0; i < M; i++) {
-                float srt = out_smear[i];
-                float end = out_smooth[i];
-                float hue = (float)360*i/M;
-                Color c = ColorFromHSV( hue, sat, val);
-                float height = h*2/3;
-                float x = bar_width*(i + 0.5);
-                float radius = 3*bar_width*sqrtf(srt); 
-                Rectangle rec2;
-                Vector2 pos ={.x=0,.y=0};
-                Rectangle rec = {
-                    .x = x - radius/2,
-                    .y = 0,
-                    .width = radius,
-                    .height = height*(end-srt),
-                };
-                if (srt >= end){
-                    rec.y = h - height*srt;
-                    rec2 = (Rectangle){0,0,1,0.5};
-                } else {
-                    rec.y = h- height*end;
-                    rec2 = (Rectangle){0,0.5,1,0.5};
-                }
-                DrawTexturePro(texture, rec2, rec, pos, 0, c);
+            // IDK why it was nan after setting every [i] = 0.0f
+            if (isnan(out_smooth[i])) out_smooth[i] = 0.0f; // safeguard aganist NAN
+            out_smooth[i] += (a - out_smooth[i])*dt*smoothness;
+            if (isnan(out_smear[i])) out_smear[i] = 0.0f; // safeguard aganist NAN
+            out_smear[i] += (out_smooth[i] - out_smear[i])*dt*smearness;
+
+            float y = out_smooth[i];
+            float hue = (float)360*i/M;
+            Color c = ColorFromHSV( hue, sat, val);
+            Vector2 srtpnt = {
+                bar_width*i + bar_width/2,
+                h - h*2/3*y 
+            };
+            Vector2 endpnt = {
+                bar_width*i + bar_width/2,
+                h 
+            };
+            float thick = bar_width*sqrtf(y)/2; 
+            DrawLineEx(srtpnt, endpnt, thick, c);
+        }
+
+        // Creating a Defaul Texture for rendering circles with shaders
+        Texture2D texture = { rlGetTextureIdDefault(), 1,1,1, PIXELFORMAT_UNCOMPRESSED_R8G8B8A8};
+
+        // Rendering Head
+        BeginShaderMode(muzk->head);
+        for (size_t i = 0; i < M; i++) {
+            float hue = (float)360*i/M;
+            float y = out_smooth[i];
+            Color c = ColorFromHSV( hue, sat, val);
+            Vector2 center = {
+                bar_width*i + bar_width/2,
+                h - h*2/3*y
+            };
+            float radius = 6*bar_width*sqrtf(y); 
+            Vector2 position = {
+                .x = center.x - radius,
+                .y = center.y - radius,
+            };
+            DrawTextureEx( texture, position, 0, 2*radius, c);
+        }
+        EndShaderMode();
+
+        // Rendering Tail
+        BeginShaderMode(muzk->tail);
+        for (size_t i = 0; i < M; i++) {
+            float hue = (float)360*i/M;
+            Color c = ColorFromHSV( hue, sat, val);
+            float srt = out_smear[i];
+            float end = out_smooth[i];
+            float hfactor = h*2/3; // height factor - what is max height a bar can go
+            float radius = 3*bar_width*sqrtf(srt); 
+            Rectangle src;
+            Rectangle dest = {
+                .x = bar_width*(i + 0.5) - radius/2,
+                .y = 0,
+                .width = radius,
+                .height = hfactor*(end-srt),
+            };
+            if (srt >= end){
+                dest.y = h - hfactor*srt;
+                src = (Rectangle){0,0,1,0.5};
+            } else {
+                dest.y = h- hfactor*end;
+                src = (Rectangle){0,0.5,1,0.5};
             }
-            EndShaderMode();
+            //                                  origin      angle   for rotation
+            //                                     ^         ^
+            //                                     |         |
+            DrawTexturePro(texture, src, dest, (Vector2){0}, 0, c);
+        }
+        EndShaderMode();
 
         float progress = GetMusicTimePlayed(muzk->song)/tt;
         DrawRectangle(0, 0, w*progress, 10, CLITERAL(Color){0x22,0x07,0x92,0xFF});
     }else {
+        const char *label;
+        Color lcoler;
         if (muzk->error) {
-            muzk->label = "Could Not load File";
+            label = "Could Not load File";
             lcoler = RED;
         }else {
-            muzk->label = "Drag&Drop Music Here";
+            label = "Drag&Drop Music Here";
             lcoler = WHITE;
         }
-        Vector2 size = MeasureTextEx(muzk->font,muzk->label, muzk->font.baseSize, 0);
+        Vector2 size = MeasureTextEx(muzk->font,label, muzk->font.baseSize, 0);
         Vector2 pos = {
             w/2-size.x/2,
             h/2-size.y/2
         };
-        DrawTextEx(muzk->font, muzk->label, pos, muzk->font.baseSize, 0, lcoler); 
+        DrawTextEx(muzk->font, label, pos, muzk->font.baseSize, 0, lcoler); 
     }
 
     EndDrawing();

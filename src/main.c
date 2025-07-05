@@ -5,8 +5,6 @@
 #include <string.h>
 #include "muzk.h"
 
-// #define HOTRELOAD
-
 const char *lib_name = "libmuzk.so";
 void *libmuzk = NULL;
 
@@ -44,9 +42,10 @@ LIST_OF_FUNC
 int main(void){
 
     if (!reload_lib()) return 1;
+    int scale_factor = 120;
 
     SetConfigFlags(FLAG_WINDOW_RESIZABLE | FLAG_MSAA_4X_HINT);
-    InitWindow(840, 630, "Music Visualizeir");
+    InitWindow(scale_factor*16, scale_factor*9, "Music Visualizeir");
     SetTargetFPS(60);
     InitAudioDevice();
     muzk_init();

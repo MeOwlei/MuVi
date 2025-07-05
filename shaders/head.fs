@@ -16,7 +16,7 @@ void main()
     } else{
         if(s <= 0.5 - r) {
             float a = 1-s/length(p);
-            finalColor = vec4(fragColor.xyz,a*a*a);
+            finalColor = vec4(fragColor.xyz,a*a*a*a);
         }else {
             finalColor = vec4(0);
         }
